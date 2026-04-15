@@ -1,0 +1,6 @@
+.*
+!.gitignore
+
+# Compiled binary and debug symbols
+city_manager
+*.dSYM/
