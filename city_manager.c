@@ -6,6 +6,7 @@
 #include <string.h>
 #include <getopt.h>
 
+char *program_name = NULL;
 typedef enum { ROLE_NONE, ROLE_INSPECTOR, ROLE_MANAGER } role_t;
 
 static void print_usage(const char *prog) {
@@ -39,6 +40,8 @@ enum {
 };
 
 int main(int argc, char *argv[]) {
+    program_name = argv[0];
+
     static struct option long_options[] = {
         {"help",          no_argument,       NULL, 'h'},
         {"role",          required_argument, NULL, OPT_ROLE},
@@ -54,13 +57,14 @@ int main(int argc, char *argv[]) {
     role_t role = ROLE_NONE;
     const char *action = NULL;
     const char *username = NULL;
-    const char *district = NULL;
+    int district = 0;
+    int value = 0;
 
     int opt;
     while ((opt = getopt_long(argc, argv, "h", long_options, NULL)) != -1) {
         switch (opt) {
             case 'h':
-                print_usage(argv[0]);
+                print_usage(program_name);
                 return 0;
             case OPT_ROLE:
                 role = parse_role(optarg);
@@ -78,62 +82,77 @@ int main(int argc, char *argv[]) {
                 break;
             case OPT_ADD:
                 action = "add";
-                district = optarg;
+                district = atoi(optarg);
                 break;
             case OPT_REMOVE_REPORT:
                 action = "remove_report";
-                district = optarg;
+                district = atoi(optarg);
                 break;
             case OPT_VIEW:
                 action = "view";
-                district = optarg;
+                district = atoi(optarg);
                 break;
             case OPT_UPDATE_THRESHOLD:
                 action = "update_threshold";
-                district = optarg;
+                district = atoi(optarg);
+                if (optind < argc) {
+                    value = atoi(argv[optind]);
+                    optind++;
+                } else {
+                    fprintf(stderr, "Error: --update_threshold requires a value argument.\n");
+                    print_usage(program_name);
+                    return 1;
+                }
                 break;
             case OPT_LIST:
                 action = "list";
-                district = optarg;
+                district = atoi(optarg);
                 break;
             default:
-                print_usage(argv[0]);
+                print_usage(program_name);
                 return 1;
         }
     }
 
     if (role == ROLE_NONE) {
         fprintf(stderr, "Error: --role is required.\n");
-        print_usage(argv[0]);
+        print_usage(program_name);
         return 1;
     }
 
     if (username == NULL) {
         fprintf(stderr, "Error: --user is required.\n");
-        print_usage(argv[0]);
+        print_usage(program_name);
         return 1;
     }
 
     if (username && strlen(username) == 0) {
         fprintf(stderr, "Error: username cannot be empty.\n");
-        print_usage(argv[0]);
+        print_usage(program_name);
         return 1;
     }
 
     if (!action) {
         fprintf(stderr, "Error: no action specified.\n");
-        print_usage(argv[0]);
+        print_usage(program_name);
         return 1;
     }
 
-    printf("Role: %s\n", role == ROLE_INSPECTOR ? "Inspector" : "Manager");
-    if (username) {
-        printf("User: %s\n", username);
+    if (strcmp(action, "update_threshold") == 0) {
+        if (value <= 0) {
+            fprintf(stderr, "Error: threshold value must be a positive integer.\n");
+            print_usage(program_name);
+            return 1;
+        }
+
+        printf("Updating threshold for district '%d' to %d (user: %s, role: %s)\n",
+               district, value, username, role == ROLE_MANAGER ? "manager" : "inspector");
+        
+        // check district folder exists
+        // update threshold file in district folder
+        // log the action
+        // close files and exit
     }
-    printf("Action: %s\n", action);
-    if (district) {
-        printf("District: %s\n", district);
-    }
-    
+
     return 0;
 }
