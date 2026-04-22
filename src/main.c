@@ -58,10 +58,13 @@ int main(int argc, char *argv[]) {
         {NULL, 0, NULL, 0}
     };
 
-    role_t role = ROLE_NONE;
+    user_t user;
+    memset(&user, 0, sizeof(user));
+    user.role = ROLE_NONE;
+    user.username[0] = '\0';
+
     const char *action = NULL;
-    const char *username = NULL;
-    int district = 0;
+    const char *district = NULL;
     int value = 0;
     const char *condition = NULL;
 
@@ -72,34 +75,43 @@ int main(int argc, char *argv[]) {
                 print_usage(program_name);
                 return 0;
             case OPT_ROLE:
-                role = parse_role(optarg);
-                if (role == ROLE_NONE) {
+                user.role = parse_role(optarg);
+                if (user.role == ROLE_NONE) {
                     fprintf(stderr, "Invalid role '%s'. Must be 'inspector' or 'manager'.\n", optarg);
                     return 1;
                 }
                 break;
             case OPT_USER:
-                username = optarg;
-                if (strlen(username) == 0) {
+                strncpy(user.username, optarg, sizeof(user.username) - 1);
+                user.username[sizeof(user.username) - 1] = '\0';
+                if (strlen(user.username) == 0) {
                     fprintf(stderr, "Username cannot be empty.\n");
                     return 1;
                 }
                 break;
             case OPT_ADD:
                 action = "add";
-                district = atoi(optarg);
+                district = optarg;
                 break;
             case OPT_REMOVE_REPORT:
                 action = "remove_report";
-                district = atoi(optarg);
+                district = optarg;
+                if (optind < argc) {
+                    value = atoi(argv[optind]);
+                    optind++;
+                } else {
+                    fprintf(stderr, "Error: --remove_report requires a report_id argument.\n");
+                    print_usage(program_name);
+                    return 1;
+                }
                 break;
             case OPT_VIEW:
                 action = "view";
-                district = atoi(optarg);
+                district = optarg;
                 break;
             case OPT_UPDATE_THRESHOLD:
                 action = "update_threshold";
-                district = atoi(optarg);
+                district = optarg;
                 if (optind < argc) {
                     value = atoi(argv[optind]);
                     optind++;
@@ -111,11 +123,11 @@ int main(int argc, char *argv[]) {
                 break;
             case OPT_LIST:
                 action = "list";
-                district = atoi(optarg);
+                district = optarg;
                 break;
             case OPT_FILTER:
                 action = "filter";
-                district = atoi(optarg);
+                district = optarg;
                 if (optind < argc) {
                     condition = argv[optind];
                     optind++;
@@ -131,19 +143,19 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    if (role == ROLE_NONE) {
+    if (user.role == ROLE_NONE) {
         fprintf(stderr, "Error: --role is required.\n");
         print_usage(program_name);
         return 1;
     }
 
-    if (username == NULL) {
+    if (strlen(user.username) == 0) {
         fprintf(stderr, "Error: --user is required.\n");
         print_usage(program_name);
         return 1;
     }
 
-    if (username && strlen(username) == 0) {
+    if (strlen(user.username) == 0) {
         fprintf(stderr, "Error: username cannot be empty.\n");
         print_usage(program_name);
         return 1;
@@ -156,33 +168,29 @@ int main(int argc, char *argv[]) {
     }
 
     if (strcmp(action, "add") == 0) {
-        printf("Adding report for district '%d' (user: %s, role: %s)\n",
-               district, username, role == ROLE_MANAGER ? "manager" : "inspector");
-        // validate input
-        // create report file in district folder
-        // log the action
-        // close files and exit
+        issue_report_t report;
+        memset(&report, 0, sizeof(report));
+        report.inspector = user;
+
+        if (add_report(district, &report) != 0) {
+            fprintf(stderr, "Error: failed to add report.\n");
+            return 1;
+        }
     } else if (strcmp(action, "remove_report") == 0) {
-        printf("Removing report from district '%d' (user: %s, role: %s)\n",
-               district, username, role == ROLE_MANAGER ? "manager" : "inspector");
-        // check report file exists in district folder
-        // remove report file
-        // log the action
-        // close files and exit
+        if (remove_report(district, value, user) != 0) {
+            fprintf(stderr, "Error: failed to remove report with ID %d.\n", value);
+            return 1;
+        }
     } else if (strcmp(action, "view") == 0) {
-        printf("Viewing report from district '%d' (user: %s, role: %s)\n",
-               district, username, role == ROLE_MANAGER ? "manager" : "inspector");
-        // check report file exists in district folder
-        // read and display report details
-        // log the action
-        // close files and exit
+        if (view_report(district, value) != 0) {
+            fprintf(stderr, "Error: failed to view report with ID %d.\n", value);
+            return 1;
+        }
     } else if (strcmp(action, "list") == 0) {
-        printf("Listing reports for district '%d' (user: %s, role: %s)\n",
-               district, username, role == ROLE_MANAGER ? "manager" : "inspector");
-        // check district folder exists
-        // list all report files in district folder
-        // log the action
-        // close files and exit
+        if (list_reports(district) != 0) {
+            fprintf(stderr, "Error: failed to list reports for district '%s'.\n", district);
+            return 1;
+        }
     } else if (strcmp(action, "update_threshold") == 0) {
         if (value <= 0) {
             fprintf(stderr, "Error: threshold value must be a positive integer.\n");
@@ -190,22 +198,15 @@ int main(int argc, char *argv[]) {
             return 1;
         }
 
-        printf("Updating threshold for district '%d' to %d (user: %s, role: %s)\n",
-               district, value, username, role == ROLE_MANAGER ? "manager" : "inspector");
-        
-        // check district folder exists
-        // update threshold file in district folder
-        // log the action
-        // close files and exit
+        if (update_threshold(district, value, user) != 0) {
+            fprintf(stderr, "Error: failed to update threshold for district '%s'.\n", district);
+            return 1;
+        }
     } else if (strcmp(action, "filter") == 0) {
-        printf("Filtering reports for district '%d' with condition '%s' (user: %s, role: %s)\n",
-               district, condition, username, role == ROLE_MANAGER ? "manager" : "inspector");
-        // check district folder exists
-        // read all report files in district folder
-        // filter reports based on criteria (e.g., severity)
-        // display filtered reports
-        // log the action
-        // close files and exit
+        if (filter_reports(district, condition) != 0) {
+            fprintf(stderr, "Error: failed to filter reports for district '%s' with condition '%s'.\n", district, condition);
+            return 1;
+        }
     } else {
         fprintf(stderr, "Error: unknown action '%s'.\n", action);
         print_usage(program_name);

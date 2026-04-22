@@ -1,7 +1,7 @@
 CC=gcc
-CFLAGS=-MMD -Wall -Wextra -pedantic -std=c11
+CFLAGS=-MMD -Wall -Wextra -pedantic -std=c11 -I src
 
-SRC=$(wildcard src/*.c)
+SRC=$(wildcard src/*.c src/**/*.c)
 OBJ=$(SRC:%.c=%.o)
 DEP=$(OBJ:%.o=%.d)
 

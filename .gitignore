@@ -8,3 +8,9 @@ city_manager
 # Build artifacts
 *.o
 *.d
+
+# Personal notes
+NOTES.md
+
+# City issue reports
+downtown
