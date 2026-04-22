@@ -5,22 +5,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
+#include "types/types.h"
+#include "actions/actions.h"
 
 char *program_name = NULL;
-typedef enum { ROLE_NONE, ROLE_INSPECTOR, ROLE_MANAGER } role_t;
-typedef struct {
-    double latitude;
-    double longitude;
-}gps_coordinates_t;
-typedef enum { ISSUE_NONE, ISSUE_ROADS, ISSUE_LIGHTING, ISSUE_FLOODING } issue_category_t;
-typedef struct {
-    int id;
-    char inspector[50];
-    gps_coordinates_t location;
-    issue_category_t category;
-    int severity;
-    char description[256];
-}issue_report_t;
 
 static void print_usage(const char *prog) {
     printf("Usage: %s --role <inspector|manager> <action> [args...]\n", prog);
@@ -210,8 +198,8 @@ int main(int argc, char *argv[]) {
         // log the action
         // close files and exit
     } else if (strcmp(action, "filter") == 0) {
-        printf("Filtering reports for district '%d' (user: %s, role: %s)\n",
-               district, username, role == ROLE_MANAGER ? "manager" : "inspector");
+        printf("Filtering reports for district '%d' with condition '%s' (user: %s, role: %s)\n",
+               district, condition, username, role == ROLE_MANAGER ? "manager" : "inspector");
         // check district folder exists
         // read all report files in district folder
         // filter reports based on criteria (e.g., severity)
