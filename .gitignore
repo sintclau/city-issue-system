@@ -4,3 +4,7 @@
 # Compiled binary and debug symbols
 city_manager
 *.dSYM/
+
+# Build artifacts
+*.o
+*.d

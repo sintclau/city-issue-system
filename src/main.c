@@ -20,7 +20,7 @@ typedef struct {
     issue_category_t category;
     int severity;
     char description[256];
-}
+}issue_report_t;
 
 static void print_usage(const char *prog) {
     printf("Usage: %s --role <inspector|manager> <action> [args...]\n", prog);
@@ -34,6 +34,7 @@ static void print_usage(const char *prog) {
     printf("  --add <district_id>                Report an issue in a district\n");
     printf("  --remove_report <district_id> <report_id> Remove a report\n");
     printf("  --update_threshold <district_id> <value> Update the issue threshold for a district\n");
+    printf("  --filter <district_id> <condition> Filter reports based on condition (e.g., severity)\n");
 }
 
 static role_t parse_role(const char *str) {
@@ -49,7 +50,8 @@ enum {
     OPT_REMOVE_REPORT,
     OPT_VIEW,
     OPT_UPDATE_THRESHOLD,
-    OPT_LIST
+    OPT_LIST,
+    OPT_FILTER
 };
 
 int main(int argc, char *argv[]) {
@@ -64,6 +66,7 @@ int main(int argc, char *argv[]) {
         {"view",          required_argument, NULL, OPT_VIEW},
         {"update_threshold", required_argument, NULL, OPT_UPDATE_THRESHOLD},
         {"list",          required_argument, NULL, OPT_LIST},
+        {"filter",        required_argument, NULL, OPT_FILTER},
         {NULL, 0, NULL, 0}
     };
 
@@ -72,6 +75,7 @@ int main(int argc, char *argv[]) {
     const char *username = NULL;
     int district = 0;
     int value = 0;
+    const char *condition = NULL;
 
     int opt;
     while ((opt = getopt_long(argc, argv, "h", long_options, NULL)) != -1) {
@@ -121,6 +125,18 @@ int main(int argc, char *argv[]) {
                 action = "list";
                 district = atoi(optarg);
                 break;
+            case OPT_FILTER:
+                action = "filter";
+                district = atoi(optarg);
+                if (optind < argc) {
+                    condition = argv[optind];
+                    optind++;
+                } else {
+                    fprintf(stderr, "Error: --filter requires a condition argument.\n");
+                    print_usage(program_name);
+                    return 1;
+                }
+                break;
             default:
                 print_usage(program_name);
                 return 1;
@@ -151,7 +167,35 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    if (strcmp(action, "update_threshold") == 0) {
+    if (strcmp(action, "add") == 0) {
+        printf("Adding report for district '%d' (user: %s, role: %s)\n",
+               district, username, role == ROLE_MANAGER ? "manager" : "inspector");
+        // validate input
+        // create report file in district folder
+        // log the action
+        // close files and exit
+    } else if (strcmp(action, "remove_report") == 0) {
+        printf("Removing report from district '%d' (user: %s, role: %s)\n",
+               district, username, role == ROLE_MANAGER ? "manager" : "inspector");
+        // check report file exists in district folder
+        // remove report file
+        // log the action
+        // close files and exit
+    } else if (strcmp(action, "view") == 0) {
+        printf("Viewing report from district '%d' (user: %s, role: %s)\n",
+               district, username, role == ROLE_MANAGER ? "manager" : "inspector");
+        // check report file exists in district folder
+        // read and display report details
+        // log the action
+        // close files and exit
+    } else if (strcmp(action, "list") == 0) {
+        printf("Listing reports for district '%d' (user: %s, role: %s)\n",
+               district, username, role == ROLE_MANAGER ? "manager" : "inspector");
+        // check district folder exists
+        // list all report files in district folder
+        // log the action
+        // close files and exit
+    } else if (strcmp(action, "update_threshold") == 0) {
         if (value <= 0) {
             fprintf(stderr, "Error: threshold value must be a positive integer.\n");
             print_usage(program_name);
@@ -165,6 +209,19 @@ int main(int argc, char *argv[]) {
         // update threshold file in district folder
         // log the action
         // close files and exit
+    } else if (strcmp(action, "filter") == 0) {
+        printf("Filtering reports for district '%d' (user: %s, role: %s)\n",
+               district, username, role == ROLE_MANAGER ? "manager" : "inspector");
+        // check district folder exists
+        // read all report files in district folder
+        // filter reports based on criteria (e.g., severity)
+        // display filtered reports
+        // log the action
+        // close files and exit
+    } else {
+        fprintf(stderr, "Error: unknown action '%s'.\n", action);
+        print_usage(program_name);
+        return 1;
     }
 
     return 0;
