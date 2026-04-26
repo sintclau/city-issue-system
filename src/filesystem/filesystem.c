@@ -45,7 +45,6 @@ int district_init(const char *district_id) {
     district_path(district_id, CONFIG_FILE, path, sizeof(path));
     if (create_file_if_missing(path, PERM_DISTRICT_CFG) == -1) return -1;
 
-    // Write default threshold only if the file was just created (size == 0).
     struct stat st;
     if (stat(path, &st) == 0 && st.st_size == 0) {
         int fd = open(path, O_WRONLY);
@@ -77,7 +76,6 @@ int check_permission(const char *path, role_t role, int need_write) {
     if (role == ROLE_MANAGER) {
         allowed = need_write ? (m & S_IWUSR) : (m & S_IRUSR);
     } else {
-        // Inspector is in the owning group.
         allowed = need_write ? (m & S_IWGRP) : (m & S_IRGRP);
     }
 
@@ -97,7 +95,6 @@ void log_action(const char *district_id, role_t role, const char *username, cons
     char path[512];
     district_path(district_id, LOG_FILE, path, sizeof(path));
 
-    // Inspectors cannot write to logged_district (644: group has no write).
     if (role != ROLE_MANAGER) {
         fprintf(stderr, "Permission denied: inspector cannot write to %s\n", path);
         return;

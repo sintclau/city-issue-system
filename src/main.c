@@ -1,6 +1,3 @@
-// City infrastructure issue reporting and monitoring system
-// Author: Spiescu Claudiu
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,16 +10,16 @@ char *program_name = NULL;
 static void print_usage(const char *prog) {
     printf("Usage: %s --role <inspector|manager> <action> [args...]\n", prog);
     printf("Options:\n");
-    printf("  -h, --help                  Show this help message\n");
-    printf("  --role <inspector|manager>  Set the user role\n");
-    printf("  --user <username>              Specify the username\n");
+    printf("  -h, --help                   Show this help message\n");
+    printf("  --role <inspector|manager>   Set the user role\n");
+    printf("  --user <username>            Specify the username\n");
     printf("Actions:\n");
-    printf("  --list <district_id>              List all reports for a district\n");
-    printf("  --view <district_id> <report_id> View details of a specific report\n");
-    printf("  --add <district_id>                Report an issue in a district\n");
-    printf("  --remove_report <district_id> <report_id> Remove a report\n");
-    printf("  --update_threshold <district_id> <value> Update the issue threshold for a district\n");
-    printf("  --filter <district_id> <condition> Filter reports based on condition (e.g., severity)\n");
+    printf("  --add <district_id>                              Report an issue\n");
+    printf("  --list <district_id>                             List all reports\n");
+    printf("  --view <district_id> <report_id>                 View a report\n");
+    printf("  --remove_report <district_id> <report_id>        Remove a report\n");
+    printf("  --update_threshold <district_id> <value>         Update severity threshold\n");
+    printf("  --filter <district_id> <field:op:value> ...      Filter reports\n");
 }
 
 static role_t parse_role(const char *str) {
@@ -46,27 +43,27 @@ int main(int argc, char *argv[]) {
     program_name = argv[0];
 
     static struct option long_options[] = {
-        {"help",          no_argument,       NULL, 'h'},
-        {"role",          required_argument, NULL, OPT_ROLE},
-        {"user",          required_argument, NULL, OPT_USER},
-        {"add",           required_argument, NULL, OPT_ADD},
-        {"remove_report", required_argument, NULL, OPT_REMOVE_REPORT},
-        {"view",          required_argument, NULL, OPT_VIEW},
+        {"help",             no_argument,       NULL, 'h'},
+        {"role",             required_argument, NULL, OPT_ROLE},
+        {"user",             required_argument, NULL, OPT_USER},
+        {"add",              required_argument, NULL, OPT_ADD},
+        {"remove_report",    required_argument, NULL, OPT_REMOVE_REPORT},
+        {"view",             required_argument, NULL, OPT_VIEW},
         {"update_threshold", required_argument, NULL, OPT_UPDATE_THRESHOLD},
-        {"list",          required_argument, NULL, OPT_LIST},
-        {"filter",        required_argument, NULL, OPT_FILTER},
+        {"list",             required_argument, NULL, OPT_LIST},
+        {"filter",           required_argument, NULL, OPT_FILTER},
         {NULL, 0, NULL, 0}
     };
 
     user_t user;
     memset(&user, 0, sizeof(user));
     user.role = ROLE_NONE;
-    user.username[0] = '\0';
 
     const char *action = NULL;
     const char *district = NULL;
     int value = 0;
-    const char *condition = NULL;
+    int nconds = 0;
+    const char **conditions = NULL;
 
     int opt;
     while ((opt = getopt_long(argc, argv, "h", long_options, NULL)) != -1) {
@@ -84,10 +81,6 @@ int main(int argc, char *argv[]) {
             case OPT_USER:
                 strncpy(user.username, optarg, sizeof(user.username) - 1);
                 user.username[sizeof(user.username) - 1] = '\0';
-                if (strlen(user.username) == 0) {
-                    fprintf(stderr, "Username cannot be empty.\n");
-                    return 1;
-                }
                 break;
             case OPT_ADD:
                 action = "add";
@@ -97,8 +90,7 @@ int main(int argc, char *argv[]) {
                 action = "remove_report";
                 district = optarg;
                 if (optind < argc) {
-                    value = atoi(argv[optind]);
-                    optind++;
+                    value = atoi(argv[optind++]);
                 } else {
                     fprintf(stderr, "Error: --remove_report requires a report_id argument.\n");
                     print_usage(program_name);
@@ -108,13 +100,19 @@ int main(int argc, char *argv[]) {
             case OPT_VIEW:
                 action = "view";
                 district = optarg;
+                if (optind < argc) {
+                    value = atoi(argv[optind++]);
+                } else {
+                    fprintf(stderr, "Error: --view requires a report_id argument.\n");
+                    print_usage(program_name);
+                    return 1;
+                }
                 break;
             case OPT_UPDATE_THRESHOLD:
                 action = "update_threshold";
                 district = optarg;
                 if (optind < argc) {
-                    value = atoi(argv[optind]);
-                    optind++;
+                    value = atoi(argv[optind++]);
                 } else {
                     fprintf(stderr, "Error: --update_threshold requires a value argument.\n");
                     print_usage(program_name);
@@ -128,14 +126,9 @@ int main(int argc, char *argv[]) {
             case OPT_FILTER:
                 action = "filter";
                 district = optarg;
-                if (optind < argc) {
-                    condition = argv[optind];
-                    optind++;
-                } else {
-                    fprintf(stderr, "Error: --filter requires a condition argument.\n");
-                    print_usage(program_name);
-                    return 1;
-                }
+                conditions = (const char **)(argv + optind);
+                nconds = argc - optind;
+                optind = argc;
                 break;
             default:
                 print_usage(program_name);
@@ -155,12 +148,6 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    if (strlen(user.username) == 0) {
-        fprintf(stderr, "Error: username cannot be empty.\n");
-        print_usage(program_name);
-        return 1;
-    }
-
     if (!action) {
         fprintf(stderr, "Error: no action specified.\n");
         print_usage(program_name);
@@ -171,40 +158,37 @@ int main(int argc, char *argv[]) {
         issue_report_t report;
         memset(&report, 0, sizeof(report));
         report.inspector = user;
-
         if (add_report(district, &report) != 0) {
             fprintf(stderr, "Error: failed to add report.\n");
             return 1;
         }
     } else if (strcmp(action, "remove_report") == 0) {
         if (remove_report(district, value, user) != 0) {
-            fprintf(stderr, "Error: failed to remove report with ID %d.\n", value);
+            fprintf(stderr, "Error: failed to remove report %d.\n", value);
             return 1;
         }
     } else if (strcmp(action, "view") == 0) {
         if (view_report(district, value) != 0) {
-            fprintf(stderr, "Error: failed to view report with ID %d.\n", value);
+            fprintf(stderr, "Error: report %d not found.\n", value);
             return 1;
         }
     } else if (strcmp(action, "list") == 0) {
         if (list_reports(district) != 0) {
-            fprintf(stderr, "Error: failed to list reports for district '%s'.\n", district);
+            fprintf(stderr, "Error: failed to list reports for '%s'.\n", district);
             return 1;
         }
     } else if (strcmp(action, "update_threshold") == 0) {
         if (value <= 0) {
             fprintf(stderr, "Error: threshold value must be a positive integer.\n");
-            print_usage(program_name);
             return 1;
         }
-
         if (update_threshold(district, value, user) != 0) {
-            fprintf(stderr, "Error: failed to update threshold for district '%s'.\n", district);
+            fprintf(stderr, "Error: failed to update threshold for '%s'.\n", district);
             return 1;
         }
     } else if (strcmp(action, "filter") == 0) {
-        if (filter_reports(district, condition) != 0) {
-            fprintf(stderr, "Error: failed to filter reports for district '%s' with condition '%s'.\n", district, condition);
+        if (filter_reports(district, nconds, conditions) != 0) {
+            fprintf(stderr, "Error: filter failed for district '%s'.\n", district);
             return 1;
         }
     } else {

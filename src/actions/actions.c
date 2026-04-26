@@ -2,12 +2,71 @@
 
 #include <fcntl.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
 #include <sys/stat.h>
 
-int add_report(const char* district, issue_report_t *report) {
+#define MAX_CONDS 16
+
+static int parse_condition(const char *input, char *field, char *op, char *value) {
+    const char *p1 = strchr(input, ':');
+    if (!p1) return -1;
+    const char *p2 = strchr(p1 + 1, ':');
+    if (!p2) return -1;
+
+    strncpy(field, input, (size_t)(p1 - input));
+    field[p1 - input] = '\0';
+
+    strncpy(op, p1 + 1, (size_t)(p2 - p1 - 1));
+    op[p2 - p1 - 1] = '\0';
+
+    strncpy(value, p2 + 1, 255);
+    value[255] = '\0';
+    return 0;
+}
+
+static int match_condition(issue_report_t *r, const char *field, const char *op, const char *value) {
+    if (strcmp(field, "severity") == 0) {
+        int v = atoi(value);
+        int s = r->severity;
+        if (strcmp(op, "==") == 0) return s == v;
+        if (strcmp(op, "!=") == 0) return s != v;
+        if (strcmp(op, "<")  == 0) return s <  v;
+        if (strcmp(op, "<=") == 0) return s <= v;
+        if (strcmp(op, ">")  == 0) return s >  v;
+        if (strcmp(op, ">=") == 0) return s >= v;
+    } else if (strcmp(field, "category") == 0) {
+        int cmp = strcmp(r->category, value);
+        if (strcmp(op, "==") == 0) return cmp == 0;
+        if (strcmp(op, "!=") == 0) return cmp != 0;
+        if (strcmp(op, "<")  == 0) return cmp <  0;
+        if (strcmp(op, "<=") == 0) return cmp <= 0;
+        if (strcmp(op, ">")  == 0) return cmp >  0;
+        if (strcmp(op, ">=") == 0) return cmp >= 0;
+    } else if (strcmp(field, "inspector") == 0) {
+        int cmp = strcmp(r->inspector.username, value);
+        if (strcmp(op, "==") == 0) return cmp == 0;
+        if (strcmp(op, "!=") == 0) return cmp != 0;
+        if (strcmp(op, "<")  == 0) return cmp <  0;
+        if (strcmp(op, "<=") == 0) return cmp <= 0;
+        if (strcmp(op, ">")  == 0) return cmp >  0;
+        if (strcmp(op, ">=") == 0) return cmp >= 0;
+    } else if (strcmp(field, "timestamp") == 0) {
+        long v = atoi(value);
+        long t = (long)r->timestamp;
+        if (strcmp(op, "==") == 0) return t == v;
+        if (strcmp(op, "!=") == 0) return t != v;
+        if (strcmp(op, "<")  == 0) return t <  v;
+        if (strcmp(op, "<=") == 0) return t <= v;
+        if (strcmp(op, ">")  == 0) return t >  v;
+        if (strcmp(op, ">=") == 0) return t >= v;
+    }
+    return 0;
+}
+
+int add_report(const char *district, issue_report_t *report) {
     if (district_init(district) == -1) return -1;
 
     char path[512];
@@ -38,7 +97,6 @@ int add_report(const char* district, issue_report_t *report) {
         return -1;
     }
 
-    // consume the leftover newline before fgets
     int c;
     while ((c = getchar()) != '\n' && c != EOF);
 
@@ -53,62 +111,263 @@ int add_report(const char* district, issue_report_t *report) {
 
     report->timestamp = time(NULL);
 
-    int file = open(path, O_WRONLY | O_CREAT | O_APPEND, PERM_REPORTS_DAT);
-    if (file == -1) {
+    int fd = open(path, O_WRONLY | O_CREAT | O_APPEND, PERM_REPORTS_DAT);
+    if (fd == -1) {
         perror(path);
         return -1;
     }
 
     struct stat st;
-    if (fstat(file, &st) == -1) {
+    if (fstat(fd, &st) == -1) {
         perror(path);
-        close(file);
+        close(fd);
         return -1;
     }
     report->id = (int)(st.st_size / sizeof(issue_report_t)) + 1;
 
-    if (write(file, report, sizeof(issue_report_t)) == -1) {
+    if (write(fd, report, sizeof(issue_report_t)) == -1) {
         perror(path);
-        close(file);
+        close(fd);
         return -1;
     }
-    close(file);
+    close(fd);
 
     chmod(path, PERM_REPORTS_DAT);
-
-    if (report->inspector.role == ROLE_MANAGER) log_action(district, report->inspector.role, report->inspector.username, "add");
+    log_action(district, report->inspector.role, report->inspector.username, "add");
     return 0;
 }
 
-int remove_report(const char* district, int report_id, user_t user) {
-    // Implementation for removing a report
+int remove_report(const char *district, int report_id, user_t user) {
     if (user.role != ROLE_MANAGER) {
         fprintf(stderr, "Permission denied: only managers can remove reports.\n");
         return -1;
     }
-    return 0;
-}
 
-int view_report(const char* district, int report_id) {
-    // Implementation for viewing a report
-    return 0;
-}
+    char path[512];
+    district_path(district, REPORTS_FILE, path, sizeof(path));
 
-int list_reports(const char* district) {
-    // Implementation for listing reports
-    return 0;
-}
+    if (check_permission(path, user.role, 1) == -1) return -1;
 
-int update_threshold(const char* district, int new_threshold, user_t user) {
-    // Implementation for updating threshold
-    if (user.role != ROLE_MANAGER) {
-        fprintf(stderr, "Permission denied: only managers can update threshold.\n");
+    int fd = open(path, O_RDWR);
+    if (fd == -1) {
+        perror(path);
         return -1;
     }
+
+    struct stat st;
+    if (fstat(fd, &st) == -1) {
+        perror(path);
+        close(fd);
+        return -1;
+    }
+
+    int total = (int)(st.st_size / (off_t)sizeof(issue_report_t));
+    int del_idx = -1;
+    issue_report_t report;
+
+    for (int i = 0; i < total; i++) {
+        lseek(fd, (off_t)(i * (int)sizeof(issue_report_t)), SEEK_SET);
+        if (read(fd, &report, sizeof(issue_report_t)) != (ssize_t)sizeof(issue_report_t))
+            break;
+        if (report.id == report_id) {
+            del_idx = i;
+            break;
+        }
+    }
+
+    if (del_idx == -1) {
+        fprintf(stderr, "Report with ID %d not found in district '%s'.\n", report_id, district);
+        close(fd);
+        return -1;
+    }
+
+    for (int i = del_idx + 1; i < total; i++) {
+        lseek(fd, (off_t)(i * (int)sizeof(issue_report_t)), SEEK_SET);
+        if (read(fd, &report, sizeof(issue_report_t)) != (ssize_t)sizeof(issue_report_t))
+            break;
+        lseek(fd, (off_t)((i - 1) * (int)sizeof(issue_report_t)), SEEK_SET);
+        write(fd, &report, sizeof(issue_report_t));
+    }
+
+    ftruncate(fd, (off_t)((total - 1) * (int)sizeof(issue_report_t)));
+    close(fd);
+
+    log_action(district, user.role, user.username, "remove_report");
+    printf("Report %d removed from district '%s'.\n", report_id, district);
     return 0;
 }
 
-int filter_reports(const char* district, const char *condition) {
-    // Implementation for filtering reports
+int view_report(const char *district, int report_id) {
+    char path[512];
+    district_path(district, REPORTS_FILE, path, sizeof(path));
+
+    int fd = open(path, O_RDONLY);
+    if (fd == -1) {
+        perror(path);
+        return -1;
+    }
+
+    issue_report_t report;
+    int found = 0;
+    while (read(fd, &report, sizeof(issue_report_t)) == (ssize_t)sizeof(issue_report_t)) {
+        if (report.id == report_id) {
+            found = 1;
+            break;
+        }
+    }
+    close(fd);
+
+    if (!found) {
+        fprintf(stderr, "Report with ID %d not found in district '%s'.\n", report_id, district);
+        return -1;
+    }
+
+    printf("Report ID:   %d\n", report.id);
+    printf("Inspector:   %s (%s)\n", report.inspector.username,
+           report.inspector.role == ROLE_MANAGER ? "manager" : "inspector");
+    printf("Location:    (%.6f, %.6f)\n", report.location.latitude, report.location.longitude);
+    printf("Category:    %s\n", report.category);
+    printf("Severity:    %d\n", report.severity);
+    printf("Description: %s\n", report.description);
+    printf("Timestamp:   %s", ctime(&report.timestamp));
+    return 0;
+}
+
+int list_reports(const char *district) {
+    char path[512];
+    district_path(district, REPORTS_FILE, path, sizeof(path));
+
+    struct stat st;
+    if (stat(path, &st) == -1) {
+        perror(path);
+        return -1;
+    }
+
+    char sym[10];
+    mode_to_string(st.st_mode, sym);
+
+    char timebuf[64];
+    strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", localtime(&st.st_mtime));
+
+    printf("File:        %s\n", path);
+    printf("Permissions: %s  |  Size: %lld bytes  |  Last modified: %s\n",
+           sym, (long long)st.st_size, timebuf);
+    printf("Records:     %lld\n", (long long)(st.st_size / (off_t)sizeof(issue_report_t)));
+    printf("---\n");
+
+    int fd = open(path, O_RDONLY);
+    if (fd == -1) {
+        perror(path);
+        return -1;
+    }
+
+    issue_report_t report;
+    int count = 0;
+    while (read(fd, &report, sizeof(issue_report_t)) == (ssize_t)sizeof(issue_report_t)) {
+        char ts[32];
+        strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M", localtime(&report.timestamp));
+        printf("[%d] %-20s | %-12s | sev:%d | %s | %s\n",
+               report.id, report.inspector.username,
+               report.category, report.severity,
+               ts, report.description);
+        count++;
+    }
+    close(fd);
+
+    if (count == 0)
+        printf("No reports found.\n");
+    return 0;
+}
+
+int update_threshold(const char *district, int new_threshold, user_t user) {
+    if (user.role != ROLE_MANAGER) {
+        fprintf(stderr, "Permission denied: only managers can update the threshold.\n");
+        return -1;
+    }
+
+    char path[512];
+    district_path(district, CONFIG_FILE, path, sizeof(path));
+
+    struct stat st;
+    if (stat(path, &st) == -1) {
+        perror(path);
+        return -1;
+    }
+    if ((st.st_mode & 0777) != PERM_DISTRICT_CFG) {
+        char sym[10];
+        mode_to_string(st.st_mode, sym);
+        fprintf(stderr, "Error: %s has unexpected permissions %s (expected rw-r-----). Refusing to write.\n",
+                path, sym);
+        return -1;
+    }
+
+    int fd = open(path, O_WRONLY | O_TRUNC);
+    if (fd == -1) {
+        perror(path);
+        return -1;
+    }
+
+    char buf[64];
+    int n = snprintf(buf, sizeof(buf), "threshold=%d\n", new_threshold);
+    write(fd, buf, (size_t)n);
+    close(fd);
+
+    log_action(district, user.role, user.username, "update_threshold");
+    printf("Threshold for district '%s' updated to %d.\n", district, new_threshold);
+    return 0;
+}
+
+int filter_reports(const char *district, int nconds, const char **conditions) {
+    if (nconds == 0) {
+        fprintf(stderr, "Error: --filter requires at least one condition (field:op:value).\n");
+        return -1;
+    }
+
+    char path[512];
+    district_path(district, REPORTS_FILE, path, sizeof(path));
+
+    char fields[MAX_CONDS][32];
+    char ops[MAX_CONDS][4];
+    char values[MAX_CONDS][256];
+
+    for (int i = 0; i < nconds && i < MAX_CONDS; i++) {
+        if (parse_condition(conditions[i], fields[i], ops[i], values[i]) == -1) {
+            fprintf(stderr, "Error: invalid condition '%s'. Expected format: field:op:value\n",
+                    conditions[i]);
+            return -1;
+        }
+    }
+
+    int fd = open(path, O_RDONLY);
+    if (fd == -1) {
+        perror(path);
+        return -1;
+    }
+
+    issue_report_t report;
+    int found = 0;
+
+    while (read(fd, &report, sizeof(issue_report_t)) == (ssize_t)sizeof(issue_report_t)) {
+        int match = 1;
+        for (int i = 0; i < nconds && i < MAX_CONDS; i++) {
+            if (!match_condition(&report, fields[i], ops[i], values[i])) {
+                match = 0;
+                break;
+            }
+        }
+        if (match) {
+            char ts[32];
+            strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M", localtime(&report.timestamp));
+            printf("[%d] %-20s | %-12s | sev:%d | %s | %s\n",
+                   report.id, report.inspector.username,
+                   report.category, report.severity,
+                   ts, report.description);
+            found++;
+        }
+    }
+    close(fd);
+
+    if (found == 0)
+        printf("No reports match the given condition(s).\n");
     return 0;
 }
