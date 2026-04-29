@@ -7,6 +7,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 
 #define MAX_CONDS 16
 
@@ -369,5 +370,57 @@ int filter_reports(const char *district, int nconds, const char **conditions) {
 
     if (found == 0)
         printf("No reports match the given condition(s).\n");
+    return 0;
+}
+
+int remove_district(const char *district_id, user_t user) {
+    if (user.role != ROLE_MANAGER) {
+        fprintf(stderr, "Permission denied: only managers can remove a district.\n");
+        return -1;
+    }
+
+    // Safety: reject district_id that contains '/' or starts with '.'
+    // to prevent accidentally passing dangerous paths to rm -rf.
+    if (strchr(district_id, '/') != NULL || district_id[0] == '.') {
+        fprintf(stderr, "Error: invalid district name '%s'.\n", district_id);
+        return -1;
+    }
+
+    struct stat st;
+    if (stat(district_id, &st) == -1 || !S_ISDIR(st.st_mode)) {
+        fprintf(stderr, "Error: district '%s' does not exist.\n", district_id);
+        return -1;
+    }
+
+    // Fork a child process to run: rm -rf <district_id>
+    pid_t pid = fork();
+    if (pid == -1) {
+        perror("fork");
+        return -1;
+    }
+
+    if (pid == 0) {
+        char *args[] = {"rm", "-rf", (char *)district_id, NULL};
+        execvp("rm", args);
+        perror("execvp");
+        exit(1);
+    }
+
+    int status;
+    if (waitpid(pid, &status, 0) == -1) {
+        perror("waitpid");
+        return -1;
+    }
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+        fprintf(stderr, "Error: rm -rf failed for district '%s'.\n", district_id);
+        return -1;
+    }
+
+    char link_name[256];
+    snprintf(link_name, sizeof(link_name), "active_reports-%s", district_id);
+    if (unlink(link_name) == -1)
+        perror(link_name);
+
+    printf("District '%s' removed.\n", district_id);
     return 0;
 }

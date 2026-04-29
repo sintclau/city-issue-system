@@ -20,6 +20,7 @@ static void print_usage(const char *prog) {
     printf("  --remove_report <district_id> <report_id>        Remove a report\n");
     printf("  --update_threshold <district_id> <value>         Update severity threshold\n");
     printf("  --filter <district_id> <field:op:value> ...      Filter reports\n");
+    printf("  --remove_district <district_id>                  Remove entire district (manager only)\n");
 }
 
 static role_t parse_role(const char *str) {
@@ -36,7 +37,8 @@ enum {
     OPT_VIEW,
     OPT_UPDATE_THRESHOLD,
     OPT_LIST,
-    OPT_FILTER
+    OPT_FILTER,
+    OPT_REMOVE_DISTRICT
 };
 
 int main(int argc, char *argv[]) {
@@ -52,6 +54,7 @@ int main(int argc, char *argv[]) {
         {"update_threshold", required_argument, NULL, OPT_UPDATE_THRESHOLD},
         {"list",             required_argument, NULL, OPT_LIST},
         {"filter",           required_argument, NULL, OPT_FILTER},
+        {"remove_district",  required_argument, NULL, OPT_REMOVE_DISTRICT},
         {NULL, 0, NULL, 0}
     };
 
@@ -130,6 +133,10 @@ int main(int argc, char *argv[]) {
                 nconds = argc - optind;
                 optind = argc;
                 break;
+            case OPT_REMOVE_DISTRICT:
+                action = "remove_district";
+                district = optarg;
+                break;
             default:
                 print_usage(program_name);
                 return 1;
@@ -189,6 +196,11 @@ int main(int argc, char *argv[]) {
     } else if (strcmp(action, "filter") == 0) {
         if (filter_reports(district, nconds, conditions) != 0) {
             fprintf(stderr, "Error: filter failed for district '%s'.\n", district);
+            return 1;
+        }
+    } else if (strcmp(action, "remove_district") == 0) {
+        if (remove_district(district, user) != 0) {
+            fprintf(stderr, "Error: failed to remove district '%s'.\n", district);
             return 1;
         }
     } else {

@@ -10,5 +10,6 @@ int view_report(const char *district, int report_id);
 int list_reports(const char *district);
 int update_threshold(const char *district, int new_threshold, user_t user);
 int filter_reports(const char *district, int nconds, const char **conditions);
+int remove_district(const char *district_id, user_t user);
 
 #endif
