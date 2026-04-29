@@ -1,4 +1,5 @@
 #include "actions.h"
+#include "monitor-communication.h"
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -135,6 +136,7 @@ int add_report(const char *district, issue_report_t *report) {
 
     chmod(path, PERM_REPORTS_DAT);
     log_action(district, report->inspector.role, report->inspector.username, "add");
+    announce_new_report();
     return 0;
 }
 
