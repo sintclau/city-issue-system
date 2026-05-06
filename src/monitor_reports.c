@@ -1,9 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <signal.h>
 #include <unistd.h>
 
 void sigint_handler(int signum) {
     printf("Received SIGINT, exiting...\n");
+    remove(".monitor_pid");
     exit(0);
 }
 
@@ -14,13 +17,13 @@ void sigusr1_handler(int signum) {
 void set_signal_action(void) {
     struct sigaction act;
 
-    bzero(&act, sizeof(act));
+    memset(&act, 0, sizeof(act));
 
-    act.sa_handler = &sigint_handl
+    act.sa_handler = &sigint_handler;
+    sigaction(SIGINT, &act, NULL);
 
     act.sa_handler = &sigusr1_handler;
-    sigaction(SIGUSR1, &act, NULL);er;
-    sigaction(SIGINT, &act, NULL);
+    sigaction(SIGUSR1, &act, NULL);
 }
 
 int main() {
@@ -29,18 +32,13 @@ int main() {
         fprintf(stderr, "Error opening .monitor_pid file\n");
         return 1;
     }
-    
     fprintf(f, "%d\n", getpid());
-
-    atexit(() => {
-        fclose(f);
-        remove(".monitor_pid");
-    });
+    fclose(f);
 
     set_signal_action();
 
     while (1) {
-        continue;
+        sigsuspend(NULL);
     }
     return 0;
 }
