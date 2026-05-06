@@ -1,1 +1,1 @@
-void announce_new_report() {}
+void announce_new_report(void);

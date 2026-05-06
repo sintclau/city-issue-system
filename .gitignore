@@ -3,6 +3,7 @@
 
 # Compiled binary and debug symbols
 city_manager
+monitor_reports
 *.dSYM/
 
 # Build artifacts

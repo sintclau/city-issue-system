@@ -1,5 +1,5 @@
 #include "actions.h"
-#include "monitor-communication.h"
+#include "../monitor-communication/monitor-communication.h"
 
 #include <fcntl.h>
 #include <stdio.h>

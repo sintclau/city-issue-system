@@ -26,7 +26,7 @@ void set_signal_action(void) {
     sigaction(SIGUSR1, &act, NULL);
 }
 
-int main() {
+int main(void) {
     FILE *f = fopen(".monitor_pid", "w");
     if (f == NULL) {
         fprintf(stderr, "Error opening .monitor_pid file\n");

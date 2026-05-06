@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <signal.h>
 
-void announce_new_report() {
+void announce_new_report(void) {
     FILE *f = fopen(".monitor_pid", "r");
     if (f == NULL) {
         fprintf(stderr, "Error opening .monitor_pid file\n");
