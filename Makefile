@@ -13,7 +13,11 @@ MANAGER_OBJ=$(MANAGER_SRC:%.c=%.o)
 MONITOR_SRC=src/monitor_reports.c
 MONITOR_OBJ=$(MONITOR_SRC:%.c=%.o)
 
-OBJ=$(SHARED_OBJ) $(MANAGER_OBJ) $(MONITOR_OBJ)
+# city_hub: hub with start_monitor command
+CITY_HUB_SRC=src/city_hub.c
+CITY_HUB_OBJ=$(CITY_HUB_SRC:%.c=%.o)
+
+OBJ=$(SHARED_OBJ) $(MANAGER_OBJ) $(MONITOR_OBJ) $(CITY_HUB_OBJ)
 DEP=$(OBJ:%.o=%.d)
 
 LIBS=$(addprefix -l,)
@@ -22,17 +26,17 @@ TARGET=/usr/local
 all: debug
 
 debug: CFLAGS += -g
-debug: city_manager monitor_reports
+debug: city_manager monitor_reports city_hub
 
 remake: clean debug
 .NOTPARALLEL: remake
 
 release: CFLAGS += -O3 -DNDEBUG
-release: clean city_manager monitor_reports
+release: clean city_manager monitor_reports city_hub
 .NOTPARALLEL: release
 
 clean:
-	rm -f $(OBJ) $(DEP) city_manager monitor_reports
+	rm -f $(OBJ) $(DEP) city_manager monitor_reports city_hub
 
 install: all
 	cp city_manager $(TARGET)/bin
@@ -42,6 +46,9 @@ city_manager: $(MANAGER_OBJ) $(SHARED_OBJ)
 	$(CC) -o $@ $^ $(LIBS)
 
 monitor_reports: $(MONITOR_OBJ) $(SHARED_OBJ)
+	$(CC) -o $@ $^ $(LIBS)
+
+city_hub: $(CITY_HUB_OBJ)
 	$(CC) -o $@ $^ $(LIBS)
 
 -include $(DEP)
